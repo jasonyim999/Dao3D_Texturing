@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Cube Making</title>
+<script type = "text/javascript">
+var gl;
+var canvas;
+var shaderProgram;
+var meshVertexPositionBuffer; //각 버택스 배열을 넣을 버퍼 변
+var meshIndexBuffer;
+var lineIndexBuffer;
+
+var meshA_FaceVertexBuffer;
+var meshA_BackFaceVertexBuffer;
+var meshB_FaceVertexBuffer;
+var meshB_BackFaceVertexBuffer;
+var meshC_FaceVertexBuffer;
+var meshC_BackFaceVertexBuffer;
+
+var meshA_FaceIndexBuffer;
+var meshA_BackFaceIndexBuffer;
+var meshB_FaceIndexBuffer;
+var meshB_BackFaceIndexBuffer;
+var meshC_FaceIndexBuffer;
+var meshC_BackFaceIndexBuffer;
+
+var meshA_WireFrameIndexBuffer;
+var meshA_BackFaceWireFrameIndexBuffer;
+var meshB_WireFrameIndexBuffer;
+var meshB_BackFaceWireFrameIndexBuffer;
+var meshC_WireFrameIndexBuffer;
+var meshC_BackFaceWireFrameIndexBuffer;
+
+
+
+var matrix;
+var projectionMatrix;
+var viewMatrix = [
+	1, 0, 0, 0,
+	0, 1, 0, 0,
+	0, 0, 1, 0,
+	0, 0, 0, 1
+];
+
+var moveCenter = [0, 0, 0];
+var translation = [0, 0, -150];
+var scale = [1, 1, 1];
+var rotate = [degToRad(0), degToRad(0), degToRad(0)];
+var viewRotate = [degToRad(0), degToRad(0), degToRad(0)];
+
+var hm = 4;
+var n = 3;
+var m = 2;
+
+
+
+function createGLContext(canvas){
+	var names = ["webgl", "experimental-webgl"]
+	var context = null;
+	for(var i=0; i<names.length; i++){
+		try{
+			context = canvas.getContext(names[i]);
+		} catch(e){
+			if(context){
+				break;
+			}
+		}
+		if(context){
+			context.viewportWidth = canvas.width;
+			context.viewportHeight = canvas.height;
+		} else{
+			alert("Failed to create WebGLcontext");
+		}
+		return context;
+	}
+}
+function loadShader(type, shaderSource){
+	var shader = gl.createShader(type);
+	gl.shaderSource(shader, shaderSource);
+	gl.compileShader(shader);
+	
+	if(!gl.getShaderParameter(shader, gl.COMPILE_STATUS)){
+		alert("Error compiling shader" + gl.getShaderInfoLog(shader));
+		gl.deleteShader(shader);
+		return null;
+	}
+	return shader;
+}
+function setupShaders(){
+var vertexShaderSource = "attribute vec4 aVertexPosition; uniform mat4 u_matrix;" +
+"uniform mat4 v_matrix; uniform mat4 p_matrix;" +
+"attribute vec4 aVertexColor; varying vec4 vColor;" +
+"attribute vec2 aTextureCoordinates;" +
+"varying vec2 vTextureCoordinates;" +
+"void main(){" +
+	"gl_Position = p_matrix * v_matrix * u_matrix * aVertexPosition; vColor = aVertexColor;" +
+	"vTextureCoordinates = aTextureCoordinates;}";
+var fragmentShaderSource = "precision mediump float; varying vec4 vColor;" +
+"varying vec2 vTextureCoordinates; " +
+"uniform sampler2D uSampler;" +
+"void main(){" +
+"gl_FragColor = texture2D(uSampler, vTextureCoordinates) + vColor;}";
+	
+	var vertexShader = loadShader(gl.VERTEX_SHADER, vertexShaderSource);
+	var fragmentShader = loadShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
+	shaderProgram = gl.createProgram();
+	gl.attachShader(shaderProgram, vertexShader);
+	gl.attachShader(shaderProgram, fragmentShader);
+	gl.linkProgram(shaderProgram);
+	
+	if(!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)){
+		alert("Failed to setup shaders");
+	}
+	
+	gl.useProgram(shaderProgram);
+	
+	shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
+	shaderProgram.texCoordLocation = gl.getAttribLocation(shaderProgram, "aTextureCoordinates");
+	shaderProgram.vertexColorAttribute = gl.getAttribLocation(shaderProgram, "aVertexColor");
+	shaderProgram.matrixLocation = gl.getUniformLocation(shaderProgram, "u_matrix");
+	shaderProgram.projectionMatrixLocation = gl.getUniformLocation(shaderProgram, "p_matrix");
+	shaderProgram.viewMatrixLocation = gl.getUniformLocation(shaderProgram, "v_matrix");
+}
+
+function setupBuffers(){
+	
+
+	//createBuffer() 실행하고 버텍스 배열을 정하고 버퍼 셋팅하기
+	setupA_FaceBuffer(n,m);
+	setupB_FaceBuffer(hm,m);
+	setupC_FaceBuffer(n,hm);
+	setupA_BackFaceBuffer(n,m);
+	setupB_BackFaceBuffer(hm,m);
+	setupC_BackFaceBuffer(n,hm);
+	
+	gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
+}
+
+function setupA_FaceBuffer(n,m){
+	//createBuffer() 실행하고 버텍스 배열을 정하고 버퍼 셋팅하기
+	meshA_FaceVertexBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, meshA_FaceVertexBuffer);
+	
+	var meshA_FaceVertex = [];
+	makeVectorVertexArray(-5,-5,5, 5,-5,5, -5,-5,-5, n,m, meshA_FaceVertex);
+	
+	
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(meshA_FaceVertex), gl.STATIC_DRAW);
+	meshA_FaceVertexBuffer.itemSize = 3;
+	meshA_FaceVertexBuffer.numberOfItems = meshA_FaceVertex.length;
+	
+		
+	meshA_FaceIndexBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshA_FaceIndexBuffer);
+	
+	var meshA_FaceIndex = [];
+	makeTriangleIndexArray(n,m,meshA_FaceIndex);
+	
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(meshA_FaceIndex), gl.STATIC_DRAW);
+	meshA_FaceIndexBuffer.itemSize = 1;
+	meshA_FaceIndexBuffer.numberOfItems = meshA_FaceIndex.length;
+	
+	
+	meshA_WireFrameIndexBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshA_WireFrameIndexBuffer);
+	
+	var meshA_WireFrameIndex = [];
+	makeWireFrameIndexArray(n,m,meshA_WireFrameIndex);
+	
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(meshA_WireFrameIndex), gl.STATIC_DRAW);
+	meshA_WireFrameIndexBuffer.itemSize = 1;
+	meshA_WireFrameIndexBuffer.numberOfItems = meshA_WireFrameIndex.length;
+
+}
+
+function setupA_BackFaceBuffer(n,m){
+	//createBuffer() 실행하고 버텍스 배열을 정하고 버퍼 셋팅하기
+	meshA_BackFaceVertexBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, meshA_BackFaceVertexBuffer);
+	
+	var meshA_BackFaceVertex = [];
+	makeVectorVertexArray(5,5,5, -5,5,5, 5,5,-5, n,m, meshA_BackFaceVertex);
+	
+	
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(meshA_BackFaceVertex), gl.STATIC_DRAW);
+	meshA_BackFaceVertexBuffer.itemSize = 3;
+	meshA_BackFaceVertexBuffer.numberOfItems = meshA_BackFaceVertex.length;
+	
+	
+	meshA_BackFaceIndexBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshA_BackFaceIndexBuffer);
+	
+	var meshA_BackFaceIndex = [];
+	makeTriangleIndexArray(n,m,meshA_BackFaceIndex);
+	
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(meshA_BackFaceIndex), gl.STATIC_DRAW);
+	meshA_BackFaceIndexBuffer.itemSize = 1;
+	meshA_BackFaceIndexBuffer.numberOfItems = meshA_BackFaceIndex.length;
+	
+	
+	
+}
+
+function setupB_FaceBuffer(n,m){
+	//createBuffer() 실행하고 버텍스 배열을 정하고 버퍼 셋팅하기
+	meshB_FaceVertexBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, meshB_FaceVertexBuffer);
+	
+	var meshB_FaceVertex = [];
+	makeVectorVertexArray(5,-5,5, 5,5,5, 5,-5,-5, n,m, meshB_FaceVertex);
+	
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(meshB_FaceVertex), gl.STATIC_DRAW);
+	meshB_FaceVertexBuffer.itemSize = 3;
+	meshB_FaceVertexBuffer.numberOfItems = meshB_FaceVertex.length;
+	
+		
+	meshB_FaceIndexBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshB_FaceIndexBuffer);
+	
+	var meshB_FaceIndex = [];
+	makeTriangleIndexArray(n,m,meshB_FaceIndex);
+	
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(meshB_FaceIndex), gl.STATIC_DRAW);
+	meshB_FaceIndexBuffer.itemSize = 1;
+	meshB_FaceIndexBuffer.numberOfItems = meshB_FaceIndex.length;
+	
+	
+	meshB_WireFrameIndexBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshB_WireFrameIndexBuffer);
+	
+	var meshB_WireFrameIndex = [];
+	makeWireFrameIndexArray(n,m,meshB_WireFrameIndex);
+	
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(meshB_WireFrameIndex), gl.STATIC_DRAW);
+	meshB_WireFrameIndexBuffer.itemSize = 1;
+	meshB_WireFrameIndexBuffer.numberOfItems = meshB_WireFrameIndex.length;
+}
+
+function setupB_BackFaceBuffer(n,m){
+	//createBuffer() 실행하고 버텍스 배열을 정하고 버퍼 셋팅하기
+	meshB_BackFaceVertexBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, meshB_BackFaceVertexBuffer);
+	
+	var meshB_BackFaceVertex = [];
+	makeVectorVertexArray(-5,5,5, -5,-5,5, -5,5,-5, n,m, meshB_BackFaceVertex);
+	
+	
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(meshB_BackFaceVertex), gl.STATIC_DRAW);
+	meshB_BackFaceVertexBuffer.itemSize = 3;
+	meshB_BackFaceVertexBuffer.numberOfItems = meshB_BackFaceVertex.length;
+	
+		
+	meshB_BackFaceIndexBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshB_BackFaceIndexBuffer);
+	
+	var meshB_BackFaceIndex = [];
+	makeTriangleIndexArray(n,m,meshB_BackFaceIndex);
+	
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(meshB_BackFaceIndex), gl.STATIC_DRAW);
+	meshB_BackFaceIndexBuffer.itemSize = 1;
+	meshB_BackFaceIndexBuffer.numberOfItems = meshB_BackFaceIndex.length;
+	
+}
+
+function setupC_FaceBuffer(n,m){
+	//createBuffer() 실행하고 버텍스 배열을 정하고 버퍼 셋팅하기
+	meshC_FaceVertexBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, meshC_FaceVertexBuffer);
+	
+	var meshC_FaceVertex = [];
+	makeVectorVertexArray(-5,5,5, 5,5,5, -5,-5,5, n,m, meshC_FaceVertex);
+	
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(meshC_FaceVertex), gl.STATIC_DRAW);
+	meshC_FaceVertexBuffer.itemSize = 3;
+	meshC_FaceVertexBuffer.numberOfItems = meshC_FaceVertex.length;
+	
+		
+	meshC_FaceIndexBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshC_FaceIndexBuffer);
+	
+	var meshC_FaceIndex = [];
+	makeTriangleIndexArray(n,m,meshC_FaceIndex);
+	
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(meshC_FaceIndex), gl.STATIC_DRAW);
+	meshC_FaceIndexBuffer.itemSize = 1;
+	meshC_FaceIndexBuffer.numberOfItems = meshC_FaceIndex.length;
+	
+	
+	meshC_WireFrameIndexBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshC_WireFrameIndexBuffer);
+	
+	var meshC_WireFrameIndex = [];
+	makeWireFrameIndexArray(n,m,meshC_WireFrameIndex);
+	
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(meshC_WireFrameIndex), gl.STATIC_DRAW);
+	meshC_WireFrameIndexBuffer.itemSize = 1;
+	meshC_WireFrameIndexBuffer.numberOfItems = meshC_WireFrameIndex.length;
+}
+
+function setupC_BackFaceBuffer(n,m){
+	//createBuffer() 실행하고 버텍스 배열을 정하고 버퍼 셋팅하기
+	meshC_BackFaceVertexBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, meshC_BackFaceVertexBuffer);
+	
+	var meshC_BackFaceVertex = [];
+	makeVectorVertexArray(-5,-5,-5, 5,-5,-5, -5,5,-5, n,m, meshC_BackFaceVertex);
+	
+	
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(meshC_BackFaceVertex), gl.STATIC_DRAW);
+	meshC_BackFaceVertexBuffer.itemSize = 3;
+	meshC_BackFaceVertexBuffer.numberOfItems = meshC_BackFaceVertex.length;
+	
+		
+	meshC_BackFaceIndexBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshC_BackFaceIndexBuffer);
+	
+	var meshC_BackFaceIndex = [];
+	makeTriangleIndexArray(n,m,meshC_BackFaceIndex);
+	
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(meshC_BackFaceIndex), gl.STATIC_DRAW);
+	meshC_BackFaceIndexBuffer.itemSize = 1;
+	meshC_BackFaceIndexBuffer.numberOfItems = meshC_BackFaceIndex.length;
+	
+}
+
+function makeVectorVertexArray(x,y,z,x1,y1,z1,x2,y2,z2,n,m,vertex){
+	var v1 = [(x1-x)/n, (y1-y)/n, (z1-z)/n];
+	var v2 = [(x2-x)/m, (y2-y)/m, (z2-z)/m];
+	
+	for(var i=0; i<m+1; i++){
+		for(var k=0; k<n+1; k++){
+			var number = i*(n+1) + k;
+ 			vertex[3*number] = x + v1[0]*k + v2[0]*i;
+			vertex[3*number+1] = y + v1[1]*k + v2[1]*i;
+			vertex[3*number+2] = z + v1[2]*k + v2[2]*i;
+		}
+	}
+	return vertex;
+}
+
+function makeTriangleIndexArray(n, m, index){
+	for(var i=0; i<m; i++){
+		for(var k=0; k<n; k++){
+			var number = i*n+k;
+			index[6*number] = number + i;
+			index[6*number+1] = number + i + n + 1;
+			index[6*number+2] = number + i + 1;
+			index[6*number+3] = number + i + 1;
+			index[6*number+4] = number + i + n + 1;
+			index[6*number+5] = number + i + n + 2;
+			
+		}
+	}
+	return index;
+}
+
+function makeWireFrameIndexArray(n,m,index){
+	for(var i=0; i<m; i++){
+		if(i==0){
+			for(k=0; k<n+1; k++){
+				index.push(n-k);
+			}
+		}
+		for(var k=0; k<n; k++){
+			index.push((i+1)*(n+1)+k);
+			index.push(i*(n+1)+k+1);
+		}
+		for(var k=0; k<n+1; k++){
+			index.push((i+2)*(n+1)-k-1);
+		}
+	}
+	return index;
+}
+
+function drawCube(){
+	matrix = [
+		1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1
+	];
+		
+	
+	matrix = mat4.translate(matrix, translation[0], translation[1], translation[2]);
+	matrix = mat4.xRotate(matrix, rotate[0]);
+	matrix = mat4.yRotate(matrix, rotate[1]);
+	matrix = mat4.zRotate(matrix, rotate[2]);
+	matrix = mat4.scale(matrix, scale[0], scale[1], scale[2]);
+	matrix = mat4.xRotate(matrix, degToRad(0));
+	matrix = mat4.translate(matrix, moveCenter[0], moveCenter[1], moveCenter[2]);
+	matrix = mat4.getCanvasTm(matrix);
+	
+	gl.uniformMatrix4fv(shaderProgram.matrixLocation, false, matrix);
+
+	gl.bindBuffer(gl.ARRAY_BUFFER, meshA_FaceVertexBuffer);
+	gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, meshA_FaceVertexBuffer.itemSize, gl.FLOAT, false, 0, 0);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshA_WireFrameIndexBuffer);
+ 	gl.vertexAttrib4f(shaderProgram.vertexColorAttribute, 0.0, 0.0, 0.0, 1);
+	gl.drawElements(gl.LINE_STRIP, meshA_WireFrameIndexBuffer.numberOfItems, gl.UNSIGNED_SHORT, 0);
+	
+	gl.bindBuffer(gl.ARRAY_BUFFER, meshA_BackFaceVertexBuffer);
+	gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, meshA_BackFaceVertexBuffer.itemSize, gl.FLOAT, false, 0, 0);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshA_WireFrameIndexBuffer);
+ 	gl.vertexAttrib4f(shaderProgram.vertexColorAttribute, 0.0, 0.0, 0.0, 1);
+	gl.drawElements(gl.LINE_STRIP, meshA_WireFrameIndexBuffer.numberOfItems, gl.UNSIGNED_SHORT, 0);
+	
+	gl.bindBuffer(gl.ARRAY_BUFFER, meshB_FaceVertexBuffer);
+	gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, meshB_FaceVertexBuffer.itemSize, gl.FLOAT, false, 0, 0);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshB_WireFrameIndexBuffer);
+ 	gl.vertexAttrib4f(shaderProgram.vertexColorAttribute, 0.0, 0.0, 0.0, 1);
+	gl.drawElements(gl.LINE_STRIP, meshB_WireFrameIndexBuffer.numberOfItems, gl.UNSIGNED_SHORT, 0);
+	
+	gl.bindBuffer(gl.ARRAY_BUFFER, meshB_BackFaceVertexBuffer);
+	gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, meshB_BackFaceVertexBuffer.itemSize, gl.FLOAT, false, 0, 0);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshB_WireFrameIndexBuffer);
+ 	gl.vertexAttrib4f(shaderProgram.vertexColorAttribute, 0.0, 0.0, 0.0, 1);
+	gl.drawElements(gl.LINE_STRIP, meshB_WireFrameIndexBuffer.numberOfItems, gl.UNSIGNED_SHORT, 0);
+	
+	gl.bindBuffer(gl.ARRAY_BUFFER, meshC_FaceVertexBuffer);
+	gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, meshC_FaceVertexBuffer.itemSize, gl.FLOAT, false, 0, 0);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshC_WireFrameIndexBuffer);
+ 	gl.vertexAttrib4f(shaderProgram.vertexColorAttribute, 0.0, 0.0, 0.0, 1);
+	gl.drawElements(gl.LINE_STRIP, meshC_WireFrameIndexBuffer.numberOfItems, gl.UNSIGNED_SHORT, 0);
+	
+	gl.bindBuffer(gl.ARRAY_BUFFER, meshC_BackFaceVertexBuffer);
+	gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, meshC_BackFaceVertexBuffer.itemSize, gl.FLOAT, false, 0, 0);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshC_WireFrameIndexBuffer);
+ 	gl.vertexAttrib4f(shaderProgram.vertexColorAttribute, 0.0, 0.0, 0.0, 1);
+	gl.drawElements(gl.LINE_STRIP, meshC_WireFrameIndexBuffer.numberOfItems, gl.UNSIGNED_SHORT, 0);
+	
+
+	gl.bindBuffer(gl.ARRAY_BUFFER, meshA_FaceVertexBuffer);
+	gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, meshA_FaceVertexBuffer.itemSize, gl.FLOAT, false, 0, 0);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshA_FaceIndexBuffer);
+ 	gl.vertexAttrib4f(shaderProgram.vertexColorAttribute, 0.9, 0.9, 0.9, 0);
+	gl.drawElements(gl.TRIANGLES, meshA_FaceIndexBuffer.numberOfItems, gl.UNSIGNED_SHORT, 0);
+		
+	gl.bindBuffer(gl.ARRAY_BUFFER, meshA_BackFaceVertexBuffer);
+	gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, meshA_BackFaceVertexBuffer.itemSize, gl.FLOAT, false, 0, 0);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshA_BackFaceIndexBuffer);
+ 	gl.vertexAttrib4f(shaderProgram.vertexColorAttribute, 0.4, 0.4, 0.4, 0);
+	gl.drawElements(gl.TRIANGLES, meshA_BackFaceIndexBuffer.numberOfItems, gl.UNSIGNED_SHORT, 0);
+
+	
+	
+	gl.bindBuffer(gl.ARRAY_BUFFER, meshB_FaceVertexBuffer);
+	gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, meshB_FaceVertexBuffer.itemSize, gl.FLOAT, false, 0, 0);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshB_FaceIndexBuffer);
+ 	gl.vertexAttrib4f(shaderProgram.vertexColorAttribute, 0.6, 0.6, 0.6, 0);
+	gl.drawElements(gl.TRIANGLES, meshB_FaceIndexBuffer.numberOfItems, gl.UNSIGNED_SHORT, 0);
+	
+	gl.bindBuffer(gl.ARRAY_BUFFER, meshB_BackFaceVertexBuffer);
+	gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, meshB_BackFaceVertexBuffer.itemSize, gl.FLOAT, false, 0, 0);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshB_BackFaceIndexBuffer);
+ 	gl.vertexAttrib4f(shaderProgram.vertexColorAttribute, 0.5, 0.5, 0.5, 0);
+	gl.drawElements(gl.TRIANGLES, meshB_BackFaceIndexBuffer.numberOfItems, gl.UNSIGNED_SHORT, 0);
+
+	
+	
+	gl.bindBuffer(gl.ARRAY_BUFFER, meshC_FaceVertexBuffer);
+	gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, meshC_FaceVertexBuffer.itemSize, gl.FLOAT, false, 0, 0);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshC_FaceIndexBuffer);
+ 	gl.vertexAttrib4f(shaderProgram.vertexColorAttribute, 1.0, 1.0, 1.0, 0);
+	gl.drawElements(gl.TRIANGLES, meshC_FaceIndexBuffer.numberOfItems, gl.UNSIGNED_SHORT, 0);
+
+	gl.bindBuffer(gl.ARRAY_BUFFER, meshC_BackFaceVertexBuffer);
+	gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, meshC_BackFaceVertexBuffer.itemSize, gl.FLOAT, false, 0, 0);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshC_BackFaceIndexBuffer);
+ 	gl.vertexAttrib4f(shaderProgram.vertexColorAttribute, 0.7, 0.7, 0.7, 0);
+	gl.drawElements(gl.TRIANGLES, meshC_BackFaceIndexBuffer.numberOfItems, gl.UNSIGNED_SHORT, 0);
+
+	
+	
+
+}
+
+function draw(){
+	gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+	gl.clear(gl.COLOR_BUFFER_BIT);
+//	gl.frontFace(gl.CW);
+	gl.enable(gl.CULL_FACE);
+	gl.enable(gl.DEPTH_TEST);
+
+	var fieldOfViewRadians = degToRad(80);
+	var aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+	var zNear = 25;
+	var zFar = 1000;
+	
+	var left = -50;
+	var right = 50;
+	var bottom = -50;
+	var top = 50;
+	
+
+	var i = 1;
+	if(i == 0){
+		projectionMatrix = mat4.projection(50, 50, 1000);
+	}else if(i == 1){
+		projectionMatrix = mat4.perspective(fieldOfViewRadians, aspect, zNear, zFar);
+	}else if(i == 2){
+		projectionMatrix = mat4.frustum(left, right, bottom, top, zNear, zFar);
+	}else if(i == 3){
+		projectionMatrix = mat4.ortho(left, right, bottom, top, zNear, zFar);
+	};
+	
+	projectionMatrix = mat4.getCanvasTm(projectionMatrix);
+	
+	
+
+	viewMatrix = mat4.zRotate(viewMatrix, viewRotate[2]);
+	viewMatrix = mat4.yRotate(viewMatrix, viewRotate[1]);
+	viewMatrix = mat4.xRotate(viewMatrix, viewRotate[0]);	
+	viewMatrix = mat4.inverse(viewMatrix, viewMatrix);
+
+	viewMatrix = mat4.getCanvasTm(viewMatrix);
+
+	matrix = [
+		1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1
+	];
+		
+	/*
+	matrix = mat4.translate(matrix, translation[0], translation[1], translation[2]);
+	matrix = mat4.xRotate(matrix, rotate[0]);
+	matrix = mat4.yRotate(matrix, rotate[1]);
+	matrix = mat4.zRotate(matrix, rotate[2]);
+	matrix = mat4.scale(matrix, scale[0], scale[1], scale[2]);
+	matrix = mat4.xRotate(matrix, degToRad(0));
+	matrix = mat4.translate(matrix, moveCenter[0], moveCenter[1], moveCenter[2]);
+	
+	matrix = mat4.getCanvasTm(matrix);
+	
+	gl.uniformMatrix4fv(shaderProgram.matrixLocation, false, matrix);
+	*/
+	gl.uniformMatrix4fv(shaderProgram.projectionMatrixLocation, false, projectionMatrix);
+	gl.uniformMatrix4fv(shaderProgram.viewMatrixLocation, false, viewMatrix);
+
+
+
+	//버퍼를 바인드해서 지정하고 포인터 지정해서 그리기
+/*
+	gl.bindBuffer(gl.ARRAY_BUFFER, meshVertexPositionBuffer);
+	gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, meshVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshIndexBuffer);
+ 	gl.vertexAttrib4f(shaderProgram.vertexColorAttribute, 0.9, 0.9, 0.9, 1.0);
+	
+	gl.drawElements(gl.TRIANGLE_STRIP, meshIndexBuffer.numberOfItems, gl.UNSIGNED_SHORT, 0);
+	*/
+	
+	drawCube();
+	
+//	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, lineIndexBuffer);
+// 	gl.vertexAttrib4f(shaderProgram.vertexColorAttribute, 0.0, 0.0, 0.0, 1.0);
+	
+// 	gl.drawElements(gl.LINE_STRIP, lineIndexBuffer.numberOfItems, gl.UNSIGNED_SHORT, 0);
+ 	
+}
+
+function finalDraw(){
+
+	setupBuffers();
+	draw();
+	
+}
+
+function startup(){
+	canvas = document.getElementById("myGLCanvas");
+	gl = createGLContext(canvas);
+	setupShaders();
+	gl.clearColor(0.8, 0.8, 0.8, 1.0);
+	
+	
+	
+	finalDraw();
+
+}
+
+var mat4 = {
+		projection: function(width, height, depth){
+			return[
+				1/width, 0, 0, -1,
+				0, -1/height, 0, 1,
+				0, 0, 1/ depth, 0,
+				0, 0, 0, 1
+			];
+		},
+		
+		ortho: function(left, right, bottom, top, near, far){
+			var rl = right - left;
+			var tb = top - bottom;
+			var nf = near - far;
+			
+			return [
+				2/rl, 0, 0, -(left+right)/rl,
+				0, 2/tb, 0, -(bottom+top)/tb,
+				0, 0, 2/nf, (near+far)/nf,
+				0, 0, 0, 1 
+			];
+		},
+		
+		perspective: function(fieldOfViewInRadians, aspect, near, far){
+			var f = Math.tan(Math.PI * 0.5 - 0.5 * fieldOfViewInRadians);
+			var rangeInv = 1.0 / (near - far);
+			
+			return [
+				f / aspect, 0, 0, 0,
+				0, f, 0, 0,
+				0, 0, (near + far) * rangeInv, near * far * rangeInv * 2,
+				0, 0, -1, 0
+			];
+		},
+		
+		frustum: function(left, right, bottom, top, near, far){
+			var rl = right - left;
+			var tb = top - bottom;
+			var fn = far - near;
+			
+			return [
+				(near*2)/rl, 0, (right + left)/rl, 0,
+				0, (near*2)/tb, (top + bottom)/tb, 0,
+				0, 0, -(far + bottom)/fn, -(far * near * 2)/fn,
+				0, 0, -1, 0
+			];
+			
+		},
+		
+		inverse: function(tm, dest){
+			if(!dest){dest = tm;}
+			
+			let e00 = tm[_00];
+			let e01 = tm[_01];
+			let e02 = tm[_02];
+			let e03 = tm[_03];
+			
+			let e10 = tm[_10];
+			let e11 = tm[_11];
+			let e12 = tm[_12];
+			let e13 = tm[_13];
+			
+			let e20 = tm[_20];
+			let e21 = tm[_21];
+			let e22 = tm[_22];
+			let e23 = tm[_23];
+			
+			let e30 = tm[_30];
+			let e31 = tm[_31];
+			let e32 = tm[_32];
+			let e33 = tm[_33];
+			
+			
+			let b00 = e00*e11 - e01*e10;
+			let b01 = e00*e12 - e02*e10;
+			let b02 = e00*e13 - e03*e10;
+			let b03 = e01*e12 - e02*e11;
+			let b04 = e01*e13 - e03*e12;
+			let b05 = e02*e13 - e03*e12;
+			let b06 = e20*e31 - e21*e30;
+			let b07 = e20*e32 - e22*e30;
+			let b08 = e20*e33 - e23*e30;
+			let b09 = e21*e32 - e22*e31;
+			let b10 = e21*e33 - e23*e31;
+			let b11 = e22*e33 - e23*e32;
+			
+			let invDet = 1/(b00*b11 - b01*b10 + b02*b09 + b03*b08 - b04*b07 + b05*b06);
+			
+			dest[_00] = (e11*b11 - e12*b10 + e13*b09)*invDet;
+			dest[_01] = (-e01*b11 + e02*b10 - e03*b09)*invDet;
+			dest[_02] = (e31*b05 - e32*b04 + e33*b03)*invDet;
+			dest[_03] = (-e21*b05 + e22*b04 - e23*b03)*invDet;
+			dest[_10] = (-e10*b11 + e12*b08 - e13*b07)*invDet;
+			dest[_11] = (e00*b11 - e02*b08 + e03*b07)*invDet;
+			dest[_12] = (-e30*b05 + e32*b02 - e33*b01)*invDet;
+			dest[_13] = (e20*b05 - e32*b02 + e23*b01)*invDet;
+			dest[_20] = (e10*b10 - e11*b08 + e13*b06)*invDet;
+			dest[_21] = (-e00*b10 + e01*b08 - e03*b06)*invDet;
+			dest[_22] = (e30*b04 - e31*b02 + e33*b00)*invDet;
+			dest[_23] = (-e20*b04 + e21*b02 - e23*b00)*invDet;
+			dest[_30] = (-e10*b09 + e11*b07 + e12*b06)*invDet;
+			dest[_31] = (e00*b09 - e01*b07 + e02*b06)*invDet;
+			dest[_32] = (-e30*b03 + e31*b01 - e32*b00)*invDet;
+			dest[_33] = (e20*b03 - e21*b01 + e22*b00)*invDet;
+			
+			
+			return dest;
+		},
+		
+		multiply: function(tm, src){
+			let e00 = tm[_00];
+			let e01 = tm[_01];
+			let e02 = tm[_02];
+			let e03 = tm[_03];
+			
+			let e10 = tm[_10];
+			let e11 = tm[_11];
+			let e12 = tm[_12];
+			let e13 = tm[_13];
+			
+			let e20 = tm[_20];
+			let e21 = tm[_21];
+			let e22 = tm[_22];
+			let e23 = tm[_23];
+			
+			let e30 = tm[_30];
+			let e31 = tm[_31];
+			let e32 = tm[_32];
+			let e33 = tm[_33];
+			
+			// 변환 매트릭스
+			let t00 = src[_00];
+			let t01 = src[_01];
+			let t02 = src[_02];
+			let t03 = src[_03];
+			
+			let t10 = src[_10];
+			let t11 = src[_11];
+			let t12 = src[_12];
+			let t13 = src[_13];
+			
+			let t20 = src[_20];
+			let t21 = src[_21];
+			let t22 = src[_22];
+			let t23 = src[_23];
+			
+			let t30 = src[_30];
+			let t31 = src[_31];
+			let t32 = src[_32];
+			let t33 = src[_33];
+			// 기존 매트릭스 뒤에 변환 매트릭스 곱하기
+			// [ t00, t01, t02, t03 ] x [ e00, e01, e02, e03 ] = [ t00 * e00 + t01 * e10 + t02 * e20, t00 * e01 + t01 * e11 + t02 * e21, t00 * e02 + t01 * e12 + t02 * e22, t00 * e03 + t01 * e13 + t02 * e23 + t03 ]
+			// [ t10, t11, t12, t13 ] x [ e10, e11, e12, e13 ] = [ t10 * e00 + t11 * e10 + t12 * e20, t10 * e01 + t11 * e11 + t12 * e21, t10 * e02 + t11 * e12 + t12 * e22, t10 * e03 + t11 * e13 + t12 * e23 + t13 ]
+			// [ t20, t21, t22, t23 ] x [ e20, e21, e22, e23 ] = [ t20 * e00 + t21 * e10 + t22 * e20, t20 * e01 + t21 * e11 + t22 * e21, t20 * e02 + t21 * e12 + t22 * e22, t20 * e03 + t21 * e13 + t22 * e23 + t23 ]
+			// [   0,   0,   0,   1 ] x [   0,   0,   0,   1 ] = [ t30 * e00 + t31 * e10 + t32 * e20, t30 * e01 + t31 * e11 + t32 * e21, t30 * e02 + t31 * e12 + t32 * e22, t30 * e03 + t31 * e13 + t32 * e23 + t33 ]
+			tm[_00] = e00 * t00 + e01 * t10 + e02 * t20;	tm[_01] = e00 * t01 + e01 * t11 + e02 * t21;	tm[_02] = e00 * t02 + e01 * t12 + e02 * t22;	tm[_03] = e00 * t03 + e01 * t13 + e02 * t23 + e03;
+			tm[_10] = e10 * t00 + e11 * t10 + e12 * t20;	tm[_11] = e10 * t01 + e11 * t11 + e12 * t21;	tm[_12] = e10 * t02 + e11 * t12 + e12 * t22;	tm[_13] = e10 * t03 + e11 * t13 + e12 * t23 + e13;
+			tm[_20] = e20 * t00 + e21 * t10 + e22 * t20;	tm[_21] = e20 * t01 + e21 * t11 + e22 * t21;	tm[_22] = e20 * t02 + e21 * t12 + e22 * t22;	tm[_23] = e20 * t03 + e21 * t13 + e22 * t23 + e23;
+			tm[_30] = e30 * t00 + e31 * t10 + e32 * t20;	tm[_31] = e30 * t01 + e31 * t11 + e32 * t21;	tm[_32] = e30 * t02 + e31 * t12 + e32 * t22;	tm[_33] = e30 * t03 + e31 * t13 + e32 * t23 + e33;
+	
+			return tm;
+		},
+		
+		scale: function(matrix, sx, sy, sz){
+			return mat4.multiply(matrix, mat4.scaling(sx, sy, sz));
+		},
+		
+		scaling: function(sx, sy, sz){
+			return[
+				sx, 0, 0, 0,
+				0, sy, 0, 0,
+				0, 0, sz, 0,
+				0, 0, 0, 1
+			];
+		},
+		
+		translate: function(matrix, tx, ty, tz){
+			return mat4.multiply(matrix, mat4.translation(tx, ty, tz));
+		},
+		
+		translation: function(tx, ty, tz){
+			return[
+				1, 0, 0, tx,
+				0, 1, 0, ty,
+				0, 0, 1, tz,
+				0, 0, 0, 1
+			];
+		},
+		
+		xRotate: function(matrix, angleInRadians){
+			return mat4.multiply(matrix, mat4.xRotation(angleInRadians));
+		},
+		
+		xRotation: function(angleInRadians){
+			var c = Math.cos(angleInRadians);
+			var s = Math.sin(angleInRadians);
+			
+			return [
+				1, 0, 0, 0,
+				0, c, -s, 0,
+				0, s, c, 0,
+				0, 0, 0, 1
+			];
+		},
+		
+		yRotate: function(matrix, angleInRadians){
+			return mat4.multiply(matrix, mat4.yRotation(angleInRadians));
+		},
+		
+		yRotation: function(angleInRadians){
+			var c = Math.cos(angleInRadians);
+			var s = Math.sin(angleInRadians);
+			
+			return [
+				c, 0, s, 0,
+				0, 1, 0, 0,
+				-s, 0, c, 0,
+				0, 0, 0, 1
+			];
+		},
+		
+		zRotate: function(matrix, angleInRadians){
+			return mat4.multiply(matrix, mat4.zRotation(angleInRadians));
+		},
+		
+		zRotation: function(angleInRadians){
+			var c = Math.cos(angleInRadians);
+			var s = Math.sin(angleInRadians);
+			
+			return [
+				c, -s, 0, 0,
+				s, c, 0, 0,
+				0, 0, 1, 0,
+				0, 0, 0, 1
+			];
+		},
+		
+		
+		
+		
+		
+		getCanvasTm: function(tm) {
+			return [ tm[_00], tm[_10], tm[_20], tm[_30],
+				tm[_01], tm[_11], tm[_21], tm[_31],
+				tm[_02], tm[_12], tm[_22], tm[_32],
+				tm[_03], tm[_13], tm[_23], tm[_33] ];
+		}
+};
+
+function radToDeg(r){
+	return r * 180/Math.PI;
+}
+
+function degToRad(d){
+	return d * Math.PI/180;
+}
+
+let _00 = 0;
+let _01 = 1;
+let _02 = 2;
+let _03 = 3;
+let _10 = 4;
+let _11 = 5;
+let _12 = 6;
+let _13 = 7;
+let _20 = 8;
+let _21 = 9;
+let _22 = 10;
+let _23 = 11;
+let _30 = 12;
+let _31 = 13;
+let _32 = 14;
+let _33 = 15;
+
+
+function RotateZ(){
+//	zAngle = document.getElementById('a');
+	za.value = parseInt(a.value);
+	
+	rotate[2] = degToRad(za.value);
+	
+	finalDraw();
+}
+function RotateY(){
+//	yAngle = document.getElementById('b');
+	ya.value = parseInt(b.value);
+	
+	rotate[1] = degToRad(ya.value);
+	
+	finalDraw();
+}
+function RotateX(){
+//	xAngle = document.getElementById('c');
+	xa.value = parseInt(c.value);
+	
+	rotate[0] = degToRad(xa.value);
+	
+	finalDraw();
+}
+
+function TranslateX(){
+//	xAngle = document.getElementById('c');
+	txa.value = parseInt(tx.value);
+	
+	translation[0] = txa.value;
+	
+	finalDraw();
+}
+function TranslateY(){
+//	xAngle = document.getElementById('c');
+	tya.value = parseInt(ty.value);
+	
+	translation[1] = tya.value;
+	
+	finalDraw();
+}
+function TranslateZ(){
+//	xAngle = document.getElementById('c');
+	tza.value = parseInt(tz.value);
+	
+	translation[2] = tza.value;
+	
+	finalDraw();
+}
+
+function ScaleXYZ(){
+//	xAngle = document.getElementById('c');
+	sxyza.value = parseInt(sxyz.value);
+
+	scale[0] =  (sxyza.value/10);
+	scale[1] =  (sxyza.value/10);
+	scale[2] =  (sxyza.value/10);
+	
+	finalDraw();
+
+}
+
+function ScaleX(){
+//	zAngle = document.getElementById('a');
+	sxa.value = parseInt(sx.value);
+
+	scale[0] = sxa.value;
+	
+	finalDraw();
+
+}
+
+function ScaleY(){
+//	zAngle = document.getElementById('a');
+	sya.value = parseInt(sy.value);
+	
+	scale[1] = sya.value;
+	
+	finalDraw();
+}
+
+function ScaleZ(){
+//	zAngle = document.getElementById('a');
+	sza.value = parseInt(sz.value);
+	
+	scale[2] = sza.value;
+	
+	finalDraw();
+}
+
+function SetN(){
+//	zAngle = document.getElementById('a');
+	n = parseInt(Nset.value);
+	
+	setNout.value = n;
+	
+	finalDraw();
+}
+
+function SetM(){
+//	zAngle = document.getElementById('a');
+	m = parseInt(Mset.value);
+	
+	setMout.value = m;
+	
+	finalDraw();
+}
+
+function SetHM(){
+//	zAngle = document.getElementById('a');
+	hm = parseInt(HMset.value);
+	
+	setHMout.value = hm;
+	
+	finalDraw();
+}
+
+</script>
+
+
+</head>
+<body onload="startup();">
+	<canvas id = "myGLCanvas" width = "500" height = "500"></canvas>
+	
+		<form oninput="RotateZ();">
+		<label for="zAngle">zAngle</label>
+		<input type="range" id="a" name="zAngle" min="-360" max="360"/>
+		<output name="z" id="za" for="a">30</output>
+	</form>
+	
+	<form oninput="RotateY();">
+		<label for="yAngle">yAngle</label>
+		<input type="range" id="b" name="YAngle" min="-360" max="360"/>
+		<output name="y" id="ya" for="b">30</output>
+	</form>
+
+	<form oninput="RotateX();">
+		<label for="xAngle">xAngle</label>
+		<input type="range" id="c" name="XAngle" min="-360" max="360"/>
+		<output name="x" id="xa" for="c">-60</output>
+	</form>
+
+	<form oninput="TranslateX();">
+		<label for="xTranslate">xTranslate</label>
+		<input type="range" id="tx" name="xTranslate" min="-200" max="200"/>
+		<output name="xRange" id="txa" for="tx">-50</output>
+	</form>
+
+	<form oninput="TranslateY();">
+		<label for="yTranslate">yTranslate</label>
+		<input type="range" id="ty" name="yTranslate" min="-200" max="200"/>
+		<output name="yRange" id="tya" for="ty">-50</output>
+	</form>
+
+	<form oninput="TranslateZ();">
+		<label for="zTranslate">zTranslate</label>
+		<input type="range" id="tz" name="zTranslate" min="-200" max="0"/>
+		<output name="zRange" id="tza" for="tz">-50</output>
+	</form>
+	
+	<form oninput="ScaleXYZ();">
+		<label for="xyzScale">xyzScale</label>
+		<input type="range" id="sxyz" name="xyzScale" min="0" max="1000"/>
+		<output name="xyzs" id="sxyza" for="sxyz">0</output>
+	</form>
+	
+	<form oninput="ScaleX();">
+		<label for="xScale">xScale</label>
+		<input type="range" id="sx" name="xScale" min="1" max="50"/>
+		<output name="xScale" id="sxa" for="sx">5</output>
+	</form>
+
+	<form oninput="ScaleY();">
+		<label for="yScale">yScale</label>
+		<input type="range" id="sy" name="yScale" min="1" max="50"/>
+		<output name="yScale" id="sya" for="sy">5</output>
+	</form>
+	
+	<form oninput="ScaleZ();">
+		<label for="zScale">zScale</label>
+		<input type="range" id="sz" name="zScale" min="1" max="50"/>
+		<output name="zScale" id="sza" for="sz">5</output>
+	</form>
+	
+	<form oninput="SetN();">
+		<label for="NSet">Set N</label>
+		<input type="range" id="Nset" name="Nset" min="1" max="50"/>
+		<output name="NSet" id="setNout" for="Nset">5</output>
+	</form>
+
+	<form oninput="SetM();">
+		<label for="MSet">Set M</label>
+		<input type="range" id="Mset" name="Mset" min="1" max="50"/>
+		<output name="MSet" id="setMout" for="Mset">5</output>
+	</form>
+	
+	<form oninput="SetHM();">
+		<label for="HMSet">Set HM</label>
+		<input type="range" id="HMset" name="HMset" min="1" max="50"/>
+		<output name="HMSet" id="setHMout" for="HMset">5</output>
+	</form>
+	
+</body>
+</html> 
